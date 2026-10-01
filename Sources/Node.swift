@@ -535,35 +535,32 @@ open class Node: Equatable, Hashable {
     @inline(__always)
     @usableFromInline
     internal func markSourceDirty(force: Bool = false) {
-        if sourceRangeDirty {
-            ownerDocument()?.registerDirtySourceRoot(self)
-            return
-        }
-        if !force, treeBuilder?.isBulkBuilding == true {
-            return
-        }
-        sourceRangeDirty = true
-        ownerDocument()?.registerDirtySourceRoot(self)
-        parentNode?.markSourceDirty(force: force, registerDirtyRoot: false)
+        markSourceDirty(force: force, registerDirtyRoot: true)
     }
 
     @inline(__always)
     @usableFromInline
     internal func markSourceDirty(force: Bool = false, registerDirtyRoot: Bool) {
-        if sourceRangeDirty {
-            if registerDirtyRoot {
-                ownerDocument()?.registerDirtySourceRoot(self)
+        // Iterative: recursing once per ancestor overflows small thread stacks on deeply nested input.
+        var node: Node? = self
+        var registersDirtyRoot = registerDirtyRoot
+        while let current = node {
+            if current.sourceRangeDirty {
+                if registersDirtyRoot {
+                    current.ownerDocument()?.registerDirtySourceRoot(current)
+                }
+                return
             }
-            return
+            if !force, current.treeBuilder?.isBulkBuilding == true {
+                return
+            }
+            current.sourceRangeDirty = true
+            if registersDirtyRoot {
+                current.ownerDocument()?.registerDirtySourceRoot(current)
+            }
+            registersDirtyRoot = false
+            node = current.parentNode
         }
-        if !force, treeBuilder?.isBulkBuilding == true {
-            return
-        }
-        sourceRangeDirty = true
-        if registerDirtyRoot {
-            ownerDocument()?.registerDirtySourceRoot(self)
-        }
-        parentNode?.markSourceDirty(force: force, registerDirtyRoot: false)
     }
 
     @inline(__always)
